@@ -1,9 +1,9 @@
 'use client'
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { 
-  Send, Sparkles, Menu, MessageSquare, 
-  Plus, History, ChevronLeft, Trash2
+import {
+  Send, Sparkles, Menu, MessageSquare,
+  Plus, History, Copy
 } from 'lucide-react';
 
 interface Message {
@@ -37,7 +37,7 @@ export default function PremiumChatbot() {
     if (savedSessions) {
       setChatHistory(JSON.parse(savedSessions));
     }
-    
+
     // 2. Start with a fresh Session ID
     setCurrentSessionId('session_' + Date.now());
   }, []);
@@ -58,11 +58,11 @@ export default function PremiumChatbot() {
     if (isLoading) return;
     setIsLoading(true);
     setCurrentSessionId(sessionId);
-    
+
     try {
       const response = await fetch(`http://198.38.84.237:8000/api/chat/history/${sessionId}`);
       if (!response.ok) throw new Error("History not found");
-      
+
       const data = await response.json();
       const formatted = data.messages.map((msg: any, i: number) => ({
         id: `hist-${i}`,
@@ -89,11 +89,11 @@ export default function PremiumChatbot() {
       const response = await fetch("http://198.38.84.237:8000/api/chat/stream", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          session_id: currentSessionId, 
+        body: JSON.stringify({
+          session_id: currentSessionId,
           message: userMessage,
           user_name: "John Doe",
-          phone: "1234567890" 
+          phone: "1234567890"
         }),
       });
 
@@ -135,12 +135,20 @@ export default function PremiumChatbot() {
     setHasStarted(false);
   };
 
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error("Copy failed", err);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
 
     const currentInput = input;
     const botMsgId = Date.now() + 1 + "";
-    
+
     // Add User Message
     setMessages(prev => [...prev, { id: Date.now().toString(), content: currentInput, role: 'user', timestamp: new Date() }]);
     setInput('');
@@ -165,7 +173,7 @@ export default function PremiumChatbot() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 font-sans overflow-hidden">
-      
+
       {/* SIDEBAR */}
       <aside className={`bg-gray-900 border-r border-gray-800 transition-all duration-300 flex flex-col z-50 ${isSidebarExpanded ? 'w-72' : 'w-20'}`}>
         <div className="p-4 flex items-center justify-between">
@@ -180,8 +188,8 @@ export default function PremiumChatbot() {
         <div className="flex-1 overflow-y-auto px-3 space-y-2 custom-scrollbar">
           {isSidebarExpanded && <div className="flex items-center gap-2 px-2 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-widest"><History size={12} /> Recent</div>}
           {chatHistory.map((chat) => (
-            <button 
-              key={chat.id} 
+            <button
+              key={chat.id}
               onClick={() => loadConversation(chat.id)}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${currentSessionId === chat.id ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-gray-400 hover:bg-gray-800/50'}`}
             >
@@ -204,6 +212,16 @@ export default function PremiumChatbot() {
                       <ReactMarkdown>{m.content}</ReactMarkdown>
                     </div>
                   </div>
+                  {m.role === 'assistant' && m.content && (
+                    <button
+                      onClick={() => handleCopy(m.content)}
+                      className="mt-2 flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-400 transition"
+                    >
+                      <Copy size={14} />
+                      Copy
+                    </button>
+                  )}
+
                 </div>
               ))}
               <div ref={messagesEndRef} />
