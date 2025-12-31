@@ -1,8 +1,9 @@
 'use client'
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { 
-  Send, Sparkles, Copy, Check, Menu, MessageSquare, 
-  Plus, History, ChevronLeft, ThumbsUp, ThumbsDown 
+  Send, Sparkles, Menu, MessageSquare, 
+  Plus, History, ChevronLeft, Trash2
 } from 'lucide-react';
 
 interface Message {
@@ -18,212 +19,218 @@ interface ChatSession {
 }
 
 export default function PremiumChatbot() {
+  // --- STATE ---
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
-  const [chatHistory, setChatHistory] = useState<ChatSession[]>([
-    { id: '1', title: 'Academic Regulations 2024' },
-    { id: '2', title: 'Administrative Guidelines' },
-  ]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // --- INITIALIZATION ---
+  useEffect(() => {
+    // 1. Load sidebar titles from LocalStorage
+    const savedSessions = localStorage.getItem('bw_sessions');
+    if (savedSessions) {
+      setChatHistory(JSON.parse(savedSessions));
+    }
+    
+    // 2. Start with a fresh Session ID
+    setCurrentSessionId('session_' + Date.now());
+  }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    // Save sidebar to local storage whenever it updates
+    if (chatHistory.length > 0) {
+      localStorage.setItem('bw_sessions', JSON.stringify(chatHistory));
+    }
+  }, [chatHistory]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // --- API INTEGRATION SECTION ---
-  const callChatbotAPI = async (userMessage) => {
-    const API_URL = "http://198.38.84.237:8000/api/chat"; 
+  // --- API: FETCH HISTORY ---
+  const loadConversation = async (sessionId: string) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setCurrentSessionId(sessionId);
     
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(`http://198.38.84.237:8000/api/chat/history/${sessionId}`);
+      if (!response.ok) throw new Error("History not found");
+      
+      const data = await response.json();
+      const formatted = data.messages.map((msg: any, i: number) => ({
+        id: `hist-${i}`,
+        content: msg.content,
+        role: msg.role,
+        timestamp: new Date(msg.timestamp)
+      }));
+
+      setMessages(formatted);
+      setHasStarted(true);
+    } catch (error) {
+      console.error("Failed to load session:", error);
+      // If history fails, we assume it's a new empty session
+      setMessages([]);
+      setHasStarted(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- API: STREAM CHAT ---
+  const callChatbotStream = async (userMessage: string, onChunk: (text: string) => void) => {
+    try {
+      const response = await fetch("http://198.38.84.237:8000/api/chat/stream", {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        // 'cors' is necessary for browser-to-IP communication
-        mode: 'cors', 
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          session_id: "user_session_123", // You can generate a unique ID here
+          session_id: currentSessionId, 
           message: userMessage,
-          username: "John Doe",           // Replace with actual user data if available
-          phone: "1234567890"            // Replace with actual user data if available
+          user_name: "John Doe",
+          phone: "1234567890" 
         }),
       });
 
-      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-      
-      const data = await response.json();
-      console.log("Response Data:", data);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
 
-      // Adjust 'data.response' based on what you see in the "Response" section of /docs
-      return data.response || data.message || data.answer || "Success, but no text returned.";
-      
+      if (!reader) return "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const rawChunk = decoder.decode(value, { stream: true });
+        const lines = rawChunk.split('\n');
+
+        for (let line of lines) {
+          let target = line.trim();
+          if (target.startsWith('data: ')) target = target.replace('data: ', '');
+          try {
+            const data = JSON.parse(target);
+            if (data.type === 'chunk' && data.content) {
+              accumulatedText += data.content;
+              onChunk(accumulatedText);
+            }
+          } catch (e) { /* partial chunk ignore */ }
+        }
+      }
+      return accumulatedText;
     } catch (error) {
-      console.error("API Connection Failed:", error);
-      return "I'm having trouble connecting to the server. Please ensure you are on a network that allows access to this IP address (try a phone hotspot).";
+      return "⚠️ Connection error.";
     }
+  };
+
+  // --- HANDLERS ---
+  const handleNewChat = () => {
+    const newId = 'session_' + Date.now();
+    setCurrentSessionId(newId);
+    setMessages([]);
+    setHasStarted(false);
   };
 
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { 
-        id: Date.now().toString(), 
-        content: input, 
-        role: 'user', 
-        timestamp: new Date() 
-    };
-
-    setMessages(prev => [...prev, userMessage]);
     const currentInput = input;
+    const botMsgId = Date.now() + 1 + "";
+    
+    // Add User Message
+    setMessages(prev => [...prev, { id: Date.now().toString(), content: currentInput, role: 'user', timestamp: new Date() }]);
     setInput('');
     setIsLoading(true);
 
+    // If this is the first message of a session, add to sidebar
     if (!hasStarted) {
       setHasStarted(true);
-      setChatHistory(prev => [{ id: Date.now().toString(), title: currentInput.slice(0, 30) + '...' }, ...prev]);
+      const newSession = { id: currentSessionId, title: currentInput.slice(0, 30) };
+      setChatHistory(prev => [newSession, ...prev]);
     }
 
-    // Call the API
-    const botResponse = await callChatbotAPI(currentInput);
+    // Add Placeholder for Bot
+    setMessages(prev => [...prev, { id: botMsgId, content: "", role: 'assistant', timestamp: new Date() }]);
 
-    const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      content: botResponse,
-      role: 'assistant',
-      timestamp: new Date()
-    };
+    await callChatbotStream(currentInput, (updatedText) => {
+      setMessages(prev => prev.map(msg => msg.id === botMsgId ? { ...msg, content: updatedText } : msg));
+    });
 
-    setMessages(prev => [...prev, assistantMessage]);
     setIsLoading(false);
   };
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden text-gray-100 font-sans">
+    <div className="flex h-screen bg-gray-950 text-gray-100 font-sans overflow-hidden">
       
-      {/* --- SIDEBAR --- */}
-      <aside className={`bg-gray-900 border-r border-gray-800 transition-all duration-300 ease-in-out flex flex-col z-50 overflow-hidden ${isSidebarExpanded ? 'w-72' : 'w-20'}`}>
-        <div className="flex flex-col h-full">
-          
-          {/* Header & Toggle */}
-          <div className={`p-4 mb-4 flex items-center ${isSidebarExpanded ? 'justify-between' : 'justify-center'}`}>
-            {isSidebarExpanded && (
-              <span className="font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent truncate tracking-tight">
-                BRAINWARE AI
-              </span>
-            )}
-            <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 hover:bg-gray-800 rounded-xl text-gray-400 transition-colors">
-              {isSidebarExpanded ? <ChevronLeft size={20} /> : <Menu size={20} />}
+      {/* SIDEBAR */}
+      <aside className={`bg-gray-900 border-r border-gray-800 transition-all duration-300 flex flex-col z-50 ${isSidebarExpanded ? 'w-72' : 'w-20'}`}>
+        <div className="p-4 flex items-center justify-between">
+          {isSidebarExpanded && <span className="font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent truncate">BRAINWARE AI</span>}
+          <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 hover:bg-gray-800 rounded-xl text-gray-400"><Menu size={20} /></button>
+        </div>
+
+        <button onClick={handleNewChat} className={`mx-3 mb-6 flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all ${isSidebarExpanded ? 'p-3' : 'p-3 justify-center'}`}>
+          <Plus size={20} /> {isSidebarExpanded && <span className="font-medium">New Chat</span>}
+        </button>
+
+        <div className="flex-1 overflow-y-auto px-3 space-y-2 custom-scrollbar">
+          {isSidebarExpanded && <div className="flex items-center gap-2 px-2 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-widest"><History size={12} /> Recent</div>}
+          {chatHistory.map((chat) => (
+            <button 
+              key={chat.id} 
+              onClick={() => loadConversation(chat.id)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${currentSessionId === chat.id ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-gray-400 hover:bg-gray-800/50'}`}
+            >
+              <MessageSquare size={18} className={currentSessionId === chat.id ? 'text-indigo-400' : ''} />
+              {isSidebarExpanded && <span className="text-sm truncate text-left flex-1">{chat.title}</span>}
             </button>
-          </div>
-
-          {/* New Chat */}
-          <div className="px-3 mb-6">
-            <button onClick={() => { setMessages([]); setHasStarted(false); }} className={`flex items-center gap-3 w-full bg-indigo-600 hover:bg-indigo-500 text-white transition-all rounded-xl ${isSidebarExpanded ? 'p-3' : 'p-3 justify-center'}`}>
-              <Plus className="w-5 h-5 flex-shrink-0" />
-              {isSidebarExpanded && <span className="font-medium whitespace-nowrap">New Chat</span>}
-            </button>
-          </div>
-
-          {/* History */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-2">
-            {/* The "Recent" icon/text disappears when collapsed as requested */}
-            {isSidebarExpanded && (
-               <div className="flex items-center gap-2 px-2 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-widest animate-fadeIn">
-                <History className="w-3 h-3" /> Recent
-              </div>
-            )}
-            {chatHistory.map((chat) => (
-              <button key={chat.id} className={`w-full flex items-center gap-3 p-3 rounded-xl text-gray-400 hover:bg-gray-800/50 hover:text-white transition-all group ${isSidebarExpanded ? '' : 'justify-center'}`}>
-                {isSidebarExpanded ? (
-  <MessageSquare className="w-5 h-5 shrink-0 group-hover:text-indigo-400" />
-) : null}
-                {isSidebarExpanded && <span className="text-sm truncate">{chat.title}</span>}
-              </button>
-            ))}
-          </div>
-
-          {/* Profile */}
-          <div className="p-4 border-t border-gray-800">
-            <div className={`flex items-center gap-3 ${isSidebarExpanded ? '' : 'justify-center'}`}>
-              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white flex-shrink-0">
-                JD
-              </div>
-              {isSidebarExpanded && (
-                <div className="overflow-hidden animate-fadeIn">
-                  <p className="text-sm font-medium truncate">John Doe</p>
-                  <p className="text-xs text-gray-500 truncate">Premium Plan</p>
-                </div>
-              )}
-            </div>
-          </div>
+          ))}
         </div>
       </aside>
 
-      {/* --- MAIN CHAT --- */}
-      <main className="flex-1 flex flex-col min-w-0 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        
-        {/* Messages */}
-        <div className="flex-1 relative flex flex-col min-h-0">
-          <div className={`flex-1 overflow-y-auto ${hasStarted ? 'opacity-100' : 'opacity-0 pointer-events-none absolute inset-0'}`}>
-            <div className="max-w-4xl mx-auto p-6 space-y-6 w-full pb-8">
-              {messages.map((message) => (
-                <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
-                  <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${message.role === 'user' ? 'bg-indigo-600 shadow-indigo-500/20 shadow-lg' : 'bg-gray-800/50 border border-gray-700/50'}`}>
-                    <p className="text-sm leading-relaxed">{message.content}</p>
+      {/* MAIN CHAT */}
+      <main className="flex-1 flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+        <div className="flex-1 relative overflow-y-auto custom-scrollbar">
+          {hasStarted ? (
+            <div className="max-w-3xl mx-auto p-6 space-y-6 pb-32">
+              {messages.map((m) => (
+                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
+                  <div className={`max-w-[85%] rounded-2xl px-5 py-3 ${m.role === 'user' ? 'bg-indigo-600 shadow-lg' : 'bg-gray-800/50 border border-gray-700/50'}`}>
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               ))}
-              {isLoading && (
-                <div className="flex gap-1.5 p-4 bg-gray-800/30 w-max rounded-2xl border border-gray-800 animate-pulse">
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce [animation-delay:0.2s]" />
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce [animation-delay:0.4s]" />
-                </div>
-              )}
               <div ref={messagesEndRef} />
             </div>
-          </div>
-
-          {/* Input & Welcome */}
-          <div className={`transition-all duration-700 ${hasStarted ? 'relative border-t border-gray-800 bg-gray-900/50 backdrop-blur-xl' : 'absolute inset-0 flex items-center justify-center'}`}>
-            <div className="w-full max-w-3xl mx-auto p-6">
-              {!hasStarted && (
-                <div className="text-center space-y-6 mb-12 animate-fadeIn">
-                  <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40">
-                    <Sparkles className="w-10 h-10 text-white" />
-                  </div>
-                  <h2 className="text-4xl font-bold tracking-tight">Brainware AI Assistant</h2>
-                  <p className="text-gray-400 text-lg">Centralized gateway to academic records and documentation.</p>
-                </div>
-              )}
-              <div className="relative group">
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-15 group-hover:opacity-30 transition duration-1000"></div>
-                <div className="relative bg-gray-900/80 backdrop-blur-md rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
-                  <input
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    placeholder="Ask anything..."
-                    className="w-full px-6 py-4 bg-transparent text-white focus:outline-none pr-16"
-                  />
-                  <button onClick={handleSubmit} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center justify-center">
-                    <Send size={18} />
-                  </button>
-                </div>
+          ) : (
+            <div className="h-full flex items-center justify-center p-6 text-center animate-fadeIn">
+              <div className="space-y-6 max-w-lg">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40"><Sparkles size={40} /></div>
+                <h2 className="text-4xl font-bold">Brainware AI</h2>
+                <p className="text-gray-400 text-lg">Select a recent chat or start a new one to begin.</p>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* INPUT */}
+        <div className="p-6 bg-gradient-to-t from-gray-950 to-transparent">
+          <div className="max-w-3xl mx-auto relative group">
+            <div className="relative bg-gray-900/80 backdrop-blur-md rounded-2xl border border-gray-700 shadow-2xl flex items-center overflow-hidden">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                placeholder="Ask anything..."
+                className="w-full px-6 py-4 bg-transparent outline-none"
+              />
+              <button onClick={handleSubmit} disabled={isLoading || !input.trim()} className="mr-3 p-2 bg-indigo-600 rounded-xl disabled:opacity-50"><Send size={18} /></button>
             </div>
           </div>
         </div>
@@ -232,8 +239,8 @@ export default function PremiumChatbot() {
       <style jsx>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </div>
   );
