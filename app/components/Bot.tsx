@@ -59,8 +59,8 @@ const ChatMessage = ({ m, onCopy }: { m: Message; onCopy: (text: string) => Prom
       className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-6`}
     >
       <div className={`relative group max-w-[85%] rounded-2xl px-5 py-3 shadow-md ${m.role === 'user'
-        ? 'bg-indigo-600 text-white'
-        : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100'
+        ? 'bg-indigo-100 text-white dark:bg-indigo-600'
+        : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-white-800 dark:text-gray-100'
         }`}>
         {m.role === 'assistant' && (
           <div className="absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -75,16 +75,16 @@ const ChatMessage = ({ m, onCopy }: { m: Message; onCopy: (text: string) => Prom
             </Tooltip>
           </div>
         )}
-        <div className="prose dark:prose-invert prose-sm max-w-none">
+        <div className="prose dark:prose-invert space-y-6 prose-sm max-w-none">
           <ReactMarkdown
   components={{
     p: ({ children }) => (
-      <p className="mb-3 leading-relaxed text-gray-800 dark:text-gray-100">
+      <p className=" leading-relaxed text-[17px] text-gray-800 dark:text-gray-100">
         {children}
       </p>
     ),
     strong: ({ children }) => (
-      <strong className="font-semibold text-indigo-600 dark:text-indigo-400">
+      <strong className="font-semibold text-[17px] text-black dark:text-indigo-400">
         {children}
       </strong>
     ),
@@ -101,16 +101,14 @@ const ChatMessage = ({ m, onCopy }: { m: Message; onCopy: (text: string) => Prom
     li: ({ children }) => (
       <li className="leading-relaxed">{children}</li>
     ),
-    code: ({ inline, children }) =>
-      inline ? (
+    code: ({  children }) =>
+      
         <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-sm">
           {children}
         </code>
-      ) : (
-        <pre className="bg-gray-900 text-gray-100 rounded-xl p-4 overflow-x-auto text-sm">
-          <code>{children}</code>
-        </pre>
-      ),
+      
+       
+     
   }}
 >
   {m.content}
@@ -287,28 +285,39 @@ export default function PremiumChatbot() {
   return (
     <div className="flex h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
 
+      
       {/* SIDEBAR */}
+      <div className='md:hidden'>
+            <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
+            {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
+      </button>
+      </div>
       <motion.aside
         animate={{ width: isSidebarExpanded ? 288 : 70 }}
-        className="bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col z-50 overflow-hidden"
+        className="bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 hidden h-full w-0 flex-col z-50 overflow-hidden md:flex absolute md:relative"
       >
         <div className={`p-4 flex items-center  ${isSidebarExpanded ? "justify-between" : "justify-center"}`}>
           <AnimatePresence>
             {isSidebarExpanded && (
               <motion.span
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="font-bold bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent truncate"
+                className="font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent truncate"
               >
                 BWU AI
               </motion.span>
             )}
           </AnimatePresence>
+          <div className='md:hidden'>
+            <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
+            {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          </div>
           <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
             {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
 
-        <button onClick={handleNewChat} className={`mx-3 mb-6 flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all ${isSidebarExpanded ? 'p-3' : 'p-3 justify-center'}`}>
+        <button onClick={handleNewChat} className={`mx-3 cursor-pointer mb-6 flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all ${isSidebarExpanded ? 'p-3' : 'p-3 justify-center'}`}>
           <Plus size={20} /> {isSidebarExpanded && <span className="font-medium">New Chat</span>}
         </button>
 
@@ -354,7 +363,7 @@ export default function PremiumChatbot() {
         <div className="absolute top-4 right-6 z-10">
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:scale-110 transition-transform"
+            className="p-2.5 cursor-pointer rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:scale-110 transition-transform"
           >
             {isDarkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-indigo-600" />}
           </button>
@@ -379,7 +388,7 @@ export default function PremiumChatbot() {
               <div ref={messagesEndRef} />
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center p-6 text-center gap-10">
+            <div className="h-full flex flex-col items-center justify-start p-6 pt-60 text-center gap-10">
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="space-y-6 max-w-lg">
                 <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40">
                   <Sparkles size={40} className="text-white" />
@@ -398,7 +407,7 @@ export default function PremiumChatbot() {
           className={`p-6 bg-linear-to-t from-white dark:from-gray-950 to-transparent
           ${hasStarted
               ? "sticky bottom-0"
-              : "sticky bottom-75"
+              : "sticky bottom-90"
             }`}
         >
 
