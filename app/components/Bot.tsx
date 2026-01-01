@@ -77,42 +77,42 @@ const ChatMessage = ({ m, onCopy }: { m: Message; onCopy: (text: string) => Prom
         )}
         <div className="prose dark:prose-invert space-y-6 prose-sm max-w-none">
           <ReactMarkdown
-  components={{
-    p: ({ children }) => (
-      <p className=" leading-relaxed text-[17px] text-gray-800 dark:text-gray-100">
-        {children}
-      </p>
-    ),
-    strong: ({ children }) => (
-      <strong className="font-semibold text-[17px] text-black dark:text-indigo-400">
-        {children}
-      </strong>
-    ),
-    ul: ({ children }) => (
-      <ul className="list-disc pl-5 mb-3 space-y-1">
-        {children}
-      </ul>
-    ),
-    ol: ({ children }) => (
-      <ol className="list-decimal pl-5 mb-3 space-y-1">
-        {children}
-      </ol>
-    ),
-    li: ({ children }) => (
-      <li className="leading-relaxed">{children}</li>
-    ),
-    code: ({  children }) =>
-      
-        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-sm">
-          {children}
-        </code>
-      
-       
-     
-  }}
->
-  {m.content}
-</ReactMarkdown>
+            components={{
+              p: ({ children }) => (
+                <p className=" leading-relaxed text-[17px] text-gray-800 dark:text-gray-100">
+                  {children}
+                </p>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-[17px] text-black dark:text-indigo-400">
+                  {children}
+                </strong>
+              ),
+              ul: ({ children }) => (
+                <ul className="list-disc pl-5 mb-3 space-y-1">
+                  {children}
+                </ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="list-decimal pl-5 mb-3 space-y-1">
+                  {children}
+                </ol>
+              ),
+              li: ({ children }) => (
+                <li className="leading-relaxed">{children}</li>
+              ),
+              code: ({ children }) =>
+
+                <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-sm">
+                  {children}
+                </code>
+
+
+
+            }}
+          >
+            {m.content}
+          </ReactMarkdown>
         </div>
       </div>
     </motion.div>
@@ -285,12 +285,12 @@ export default function PremiumChatbot() {
   return (
     <div className="flex h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
 
-      
+
       {/* SIDEBAR */}
       <div className='md:hidden'>
-            <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
-            {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
-      </button>
+        <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
+          {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
+        </button>
       </div>
       <motion.aside
         animate={{ width: isSidebarExpanded ? 288 : 70 }}
@@ -309,8 +309,8 @@ export default function PremiumChatbot() {
           </AnimatePresence>
           <div className='md:hidden'>
             <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
-            {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
-          </button>
+              {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
           <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
             {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
@@ -333,7 +333,7 @@ export default function PremiumChatbot() {
                 }`}
               style={{
                 opacity: isSidebarExpanded ? "100" : "0",
-                
+
               }}
             >
               {isSidebarExpanded && (<MessageSquare size={18} className="shrink-0" />)}
@@ -388,15 +388,45 @@ export default function PremiumChatbot() {
               <div ref={messagesEndRef} />
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-start p-6 pt-60 text-center gap-10">
+            <div className="h-full flex flex-col items-center justify-center p-6 text-center gap-2">
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="space-y-6 max-w-lg">
-                <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-linear-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40">
                   <Sparkles size={40} className="text-white" />
                 </div>
                 <h2 className="text-4xl font-bold dark:text-white">Brainware AI</h2>
                 <p className="text-gray-500 dark:text-gray-400 text-lg">Instant access to academics, administration, and insights</p>
               </motion.div>
+              <motion.div
+                layout
+                transition={{ type: "spring", stiffness: 120, damping: 18 }}
+                className={`p-6 bg-linear-to-t from-white dark:from-gray-950 to-transparent w-full
+                ${hasStarted
+                    ? "sticky bottom-0"
+                    : ""
+                  }`}
+              >
+
+                <div className="max-w-3xl mx-auto relative group">
+                  <div className="relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl flex items-center overflow-hidden focus-within:ring-2 ring-indigo-500/50 transition-all">
+                    <input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                      placeholder="Ask anything..."
+                      className="w-full px-6 py-4 bg-transparent outline-none text-gray-800 dark:text-gray-100"
+                    />
+                    <button
+                      onClick={handleSubmit}
+                      disabled={isLoading || !input.trim()}
+                      className="mr-3 p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:opacity-30 disabled:hover:bg-indigo-600 transition-all"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
             </div>
+
           )}
         </div>
 
@@ -407,7 +437,7 @@ export default function PremiumChatbot() {
           className={`p-6 bg-linear-to-t from-white dark:from-gray-950 to-transparent
           ${hasStarted
               ? "sticky bottom-0"
-              : "sticky bottom-90"
+              : "hidden sticky bottom-70"
             }`}
         >
 
