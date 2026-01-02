@@ -1,9 +1,10 @@
-import Bot from "./components/Bot";
+import Link from "next/link";
 
 export default function Home() {
   return (
     <>
-      <Bot/>
+      <Link href="/bot">Get started</Link>
+      
     </>
   );
 }
