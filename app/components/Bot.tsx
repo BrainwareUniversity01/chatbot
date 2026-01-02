@@ -19,6 +19,13 @@ interface ChatSession {
   title: string;
 }
 
+const generateId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+};
+
 // Sub-component for individual messages to handle local "copied" state
 const ChatMessage = ({ m, onCopy }: { m: Message; onCopy: (text: string) => Promise<boolean> }) => {
   const [isCopied, setIsCopied] = useState(false);
@@ -216,63 +223,94 @@ export default function PremiumChatbot() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return;
-    const currentInput = input;
-    const botMsgId = Date.now() + 1 + "";
+ const handleSubmit = async () => {
+  if (!input.trim() || isLoading) return;
+  
+  const currentInput = input;
+const userMsgId = generateId();
+const botMsgId = generateId(); 
 
-    setMessages(prev => [...prev, { id: Date.now().toString(), content: currentInput, role: 'user', timestamp: new Date() }]);
-    setInput('');
-    setIsLoading(true);
+  // 1. Add ONLY the User Message initially
+  setMessages(prev => [...prev, { 
+    id: userMsgId, 
+    content: currentInput, 
+    role: 'user', 
+    timestamp: new Date() 
+  }]);
+  
+  setInput('');
+  setIsLoading(true);
 
-    if (!hasStarted) {
-      setHasStarted(true);
-      setChatHistory(prev => [{ id: currentSessionId, title: currentInput.slice(0, 30) }, ...prev]);
-    }
+  if (!hasStarted) {
+    setHasStarted(true);
+    setChatHistory(prev => [{ id: currentSessionId, title: currentInput.slice(0, 30) }, ...prev]);
+  }
 
-    setMessages(prev => [...prev, { id: botMsgId, content: "", role: 'assistant', timestamp: new Date() }]);
+  try {
+    const response = await fetch("/api/chat/stream", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: currentSessionId,
+        message: currentInput,
+        user_name: "John Doe",
+        phone: "1234567890"
+      }),
+    });
 
-    try {
-      const response = await fetch("http://198.38.84.237:8000/api/chat/stream", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: currentSessionId,
-          message: currentInput,
-          user_name: "John Doe",
-          phone: "1234567890"
-        }),
-      });
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = "";
+    let isFirstChunk = true; // Track if this is the start of the response
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedText = "";
-
-      if (reader) {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          const rawChunk = decoder.decode(value, { stream: true });
-          const lines = rawChunk.split('\n');
-          for (let line of lines) {
-            let target = line.trim();
-            if (target.startsWith('data: ')) target = target.replace('data: ', '');
-            try {
-              const data = JSON.parse(target);
-              if (data.type === 'chunk' && data.content) {
+    if (reader) {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        const rawChunk = decoder.decode(value, { stream: true });
+        const lines = rawChunk.split('\n');
+        
+        for (let line of lines) {
+          let target = line.trim();
+          if (!target || !target.startsWith('data: ')) continue;
+          target = target.replace('data: ', '');
+          
+          try {
+            const data = JSON.parse(target);
+            if (data.type === 'chunk' && data.content) {
+              
+              // 2. Create the assistant bubble ONLY when the first text arrives
+              if (isFirstChunk) {
+                setMessages(prev => [...prev, { 
+                  id: botMsgId, 
+                  content: data.content, 
+                  role: 'assistant', 
+                  timestamp: new Date() 
+                }]);
+                isFirstChunk = false;
+              } else {
+                // Update the existing bubble for subsequent chunks
                 accumulatedText += data.content;
-                setMessages(prev => prev.map(msg => msg.id === botMsgId ? { ...msg, content: accumulatedText } : msg));
+                setMessages(prev => prev.map(msg => 
+                  msg.id === botMsgId ? { ...msg, content: accumulatedText } : msg
+                ));
               }
-            } catch (e) { }
-          }
+              // Set internal accumulated text to keep up with the loop
+              if (isFirstChunk === false && accumulatedText === "") {
+                  accumulatedText = data.content;
+              }
+            }
+          } catch (e) {}
         }
       }
-    } catch (error) {
-      setMessages(prev => prev.map(msg => msg.id === botMsgId ? { ...msg, content: "⚠️ Connection error." } : msg));
-    } finally {
-      setIsLoading(false);
     }
-  };
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleNewChat = () => {
     setCurrentSessionId('session_' + Date.now());
@@ -283,15 +321,74 @@ export default function PremiumChatbot() {
 
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
+    <div className="flex h-dvh bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
 
 
       {/* SIDEBAR */}
       <div className='md:hidden'>
-        <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
+        <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer absolute z-50 top-4 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
           {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
+      <motion.aside
+        animate={{ width: isSidebarExpanded ? 288 : 0 , x : isSidebarExpanded ? 0 : -1}}
+        className="bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800  h-full w-0 flex-col z-50 overflow-hidden md:flex absolute "
+      >
+        <div className={`p-4 flex items-center  ${isSidebarExpanded ? "justify-between" : "justify-center"}`}>
+          <AnimatePresence>
+            {isSidebarExpanded && (
+              <motion.span
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent truncate"
+              >
+                BWU AI
+              </motion.span>
+            )}
+          </AnimatePresence>
+          
+          <button onClick={() => setIsSidebarExpanded(!isSidebarExpanded)} className="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl text-gray-500">
+            {isSidebarExpanded ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        <button onClick={handleNewChat} className={`mx-3 cursor-pointer w-[-webkit-fill-available] mb-6 flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all ${isSidebarExpanded ? 'p-3' : 'p-3 justify-center'}`}>
+          <Plus size={20} /> {isSidebarExpanded && <span className="font-medium">New Chat</span>}
+        </button>
+
+        <div className="flex-1 overflow-y-auto px-3 space-y-1 custom-scrollbar">
+          {isSidebarExpanded && <div className="px-2 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-widest">Recent</div>}
+          {chatHistory.map((chat) => (
+            <div
+              key={chat.id}
+              onClick={() => loadConversation(chat.id)}
+              className={`group relative w-full flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${currentSessionId === chat.id
+                ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                : 'hover:bg-gray-200 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400'
+                }`}
+              style={{
+                opacity: isSidebarExpanded ? "100" : "0",
+
+              }}
+            >
+              {isSidebarExpanded && (<MessageSquare size={18} className="shrink-0" />)}
+              {isSidebarExpanded && (
+                <>
+                  <span className="text-sm truncate flex-1">{chat.title}</span>
+                  <Tooltip text="Delete Chat">
+                    <button
+                      onClick={(e) => deleteSession(e, chat.id)}
+                      aria-label="Delete conversation"
+                      className="opacity-0 cursor-pointer group-hover:opacity-100 p-1.5 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </Tooltip>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </motion.aside>
       <motion.aside
         animate={{ width: isSidebarExpanded ? 288 : 70 }}
         className="bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 hidden h-full w-0 flex-col z-50 overflow-hidden md:flex absolute md:relative"
