@@ -225,25 +225,28 @@ export default function PremiumChatbot() {
 
  const handleSubmit = async () => {
   if (!input.trim() || isLoading) return;
-  
-  const currentInput = input;
-const userMsgId = generateId();
-const botMsgId = generateId(); 
 
-  // 1. Add ONLY the User Message initially
-  setMessages(prev => [...prev, { 
-    id: userMsgId, 
-    content: currentInput, 
-    role: 'user', 
-    timestamp: new Date() 
-  }]);
-  
+  const currentInput = input;
+  const userMsgId = generateId();
+  const botMsgId = generateId();
+
+  // 1. Add User Message
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: userMsgId,
+      content: currentInput,
+      role: 'user',
+      timestamp: new Date(),
+    },
+  ]);
+
   setInput('');
   setIsLoading(true);
 
   if (!hasStarted) {
     setHasStarted(true);
-    setChatHistory(prev => [{ id: currentSessionId, title: currentInput.slice(0, 30) }, ...prev]);
+    setChatHistory((prev) => [{ id: currentSessionId, title: currentInput.slice(0, 30) }, ...prev]);
   }
 
   try {
@@ -260,53 +263,57 @@ const botMsgId = generateId();
 
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
-    let accumulatedText = "";
-    let isFirstChunk = true; // Track if this is the start of the response
+    let isFirstChunk = true;
+    let fullResponseText = ""; // Keep track of the full text locally
 
     if (reader) {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        
+
         const rawChunk = decoder.decode(value, { stream: true });
         const lines = rawChunk.split('\n');
-        
+
         for (let line of lines) {
           let target = line.trim();
           if (!target || !target.startsWith('data: ')) continue;
           target = target.replace('data: ', '');
-          
+
           try {
             const data = JSON.parse(target);
             if (data.type === 'chunk' && data.content) {
-              
-              // 2. Create the assistant bubble ONLY when the first text arrives
+              const contentChunk = data.content;
+              fullResponseText += contentChunk; // Append to local variable
+
               if (isFirstChunk) {
-                setMessages(prev => [...prev, { 
-                  id: botMsgId, 
-                  content: data.content, 
-                  role: 'assistant', 
-                  timestamp: new Date() 
-                }]);
+                // Create the assistant bubble with the first chunk
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: botMsgId,
+                    content: fullResponseText,
+                    role: 'assistant',
+                    timestamp: new Date(),
+                  },
+                ]);
                 isFirstChunk = false;
               } else {
-                // Update the existing bubble for subsequent chunks
-                accumulatedText += data.content;
-                setMessages(prev => prev.map(msg => 
-                  msg.id === botMsgId ? { ...msg, content: accumulatedText } : msg
-                ));
-              }
-              // Set internal accumulated text to keep up with the loop
-              if (isFirstChunk === false && accumulatedText === "") {
-                  accumulatedText = data.content;
+                // Update the existing assistant bubble
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === botMsgId ? { ...msg, content: fullResponseText } : msg
+                  )
+                );
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error("Error parsing JSON chunk", e);
+          }
         }
       }
     }
   } catch (error) {
-    console.error(error);
+    console.error("Submission error:", error);
   } finally {
     setIsLoading(false);
   }
