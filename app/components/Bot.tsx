@@ -183,28 +183,36 @@ export default function PremiumChatbot() {
   }, [messages]);
 
   const loadConversation = async (sessionId: string) => {
-    if (isLoading) return;
-    setIsLoading(true);
-    setCurrentSessionId(sessionId);
+  if (isLoading) return;
+  setIsLoading(true);
+  
+  
+  setCurrentSessionId(sessionId);
 
-    try {
-      const response = await fetch(`http://198.38.84.237:8000/api/chat/history/${sessionId}`);
-      if (!response.ok) throw new Error("History not found");
-      const data = await response.json();
-      setMessages(data.messages.map((msg: any, i: number) => ({
-        id: `hist-${i}`,
-        content: msg.content,
-        role: msg.role,
-        timestamp: new Date(msg.timestamp)
-      })));
-      setHasStarted(true);
-    } catch (error) {
-      setMessages([]);
-      setHasStarted(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  try {
+    
+    const response = await fetch(`http://198.38.84.237:8000/api/chat/history/${sessionId}`);
+    if (!response.ok) throw new Error("History not found");
+    const data = await response.json();
+    
+    setMessages(data.messages.map((msg: any, i: number) => ({
+      id: `hist-${i}`,
+      content: msg.content,
+      role: msg.role,
+      timestamp: new Date(msg.timestamp)
+    })));
+    
+    
+    setHasStarted(true); 
+  } catch (error) {
+    console.error("Failed to load history:", error);
+    
+    setMessages([]);
+    setHasStarted(false);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const deleteSession = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
